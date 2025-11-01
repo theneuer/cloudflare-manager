@@ -8,16 +8,19 @@ export function initDatabase(dbPath: string): Database.Database {
 
   // 自动迁移1：检查并添加subdomain字段
   try {
-    const columns = db.prepare("PRAGMA table_info(accounts)").all() as any[];
-    const hasSubdomain = columns.some(col => col.name === 'subdomain');
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='accounts'").all();
+    if (tables.length > 0) {
+      const columns = db.prepare("PRAGMA table_info(accounts)").all() as any[];
+      const hasSubdomain = columns.some(col => col.name === 'subdomain');
 
-    if (!hasSubdomain) {
-      console.log('Running migration: Adding subdomain column to accounts table...');
-      db.exec('ALTER TABLE accounts ADD COLUMN subdomain TEXT;');
-      console.log('Migration completed successfully');
+      if (!hasSubdomain) {
+        console.log('Running migration: Adding subdomain column to accounts table...');
+        db.exec('ALTER TABLE accounts ADD COLUMN subdomain TEXT;');
+        console.log('Migration completed successfully');
+      }
     }
   } catch (error) {
-    // 表不存在时会报错，继续创建表即可
+    console.error('Migration error (subdomain):', error);
   }
 
   // 自动迁移2：更新jobs表的CHECK约束以支持'list'类型
@@ -78,13 +81,16 @@ export function initDatabase(dbPath: string): Database.Database {
 
   // 自动迁移3：添加last_error字段
   try {
-    const columns = db.prepare("PRAGMA table_info(accounts)").all() as any[];
-    const hasLastError = columns.some(col => col.name === 'last_error');
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='accounts'").all();
+    if (tables.length > 0) {
+      const columns = db.prepare("PRAGMA table_info(accounts)").all() as any[];
+      const hasLastError = columns.some(col => col.name === 'last_error');
 
-    if (!hasLastError) {
-      console.log('Running migration: Adding last_error column to accounts table...');
-      db.exec('ALTER TABLE accounts ADD COLUMN last_error TEXT;');
-      console.log('Migration completed successfully');
+      if (!hasLastError) {
+        console.log('Running migration: Adding last_error column to accounts table...');
+        db.exec('ALTER TABLE accounts ADD COLUMN last_error TEXT;');
+        console.log('Migration completed successfully');
+      }
     }
   } catch (error) {
     console.error('Migration error (last_error):', error);
@@ -112,6 +118,7 @@ export function initDatabase(dbPath: string): Database.Database {
       subdomain TEXT,
       status TEXT DEFAULT 'active' CHECK(status IN ('active', 'inactive', 'error')),
       last_check DATETIME,
+      last_error TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
