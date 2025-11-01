@@ -58,35 +58,52 @@
 
 ## 快速开始
 
-### 方式1: Docker部署
+### 方式1: Docker部署（推荐）
 
-1. **构建镜像**
+**使用docker-compose**（处理了所有配置和数据持久化）：
+
 ```bash
-docker build -t cloudflare-manager:latest .
+# 1. 首次启动：构建并启动容器
+docker-compose up -d --build
+
+# 2. 查看日志
+docker-compose logs -f
+
+# 3. 停止服务
+docker-compose down
+
+# 4. 停止并删除数据（谨慎使用！）
+docker-compose down -v
 ```
 
-2. **运行容器**
+**环境变量配置**：
+- 可选：复制 `.env.example` 为 `.env` 并修改 `JWT_SECRET`
+- docker-compose会自动使用 Named Volume 管理数据（无权限问题）
+- 数据持久化在 `cloudflare-data` volume 中
+
+**仅docker命令部署**（不推荐，仅供参考）：
+
 ```bash
+# 1. 构建镜像
+docker build -t cloudflare-manager:latest .
+
+# 2. 创建Named Volume（持久化数据）
+docker volume create cloudflare-data
+
+# 3. 运行容器（使用Named Volume，避免权限问题）
 docker run -d \
   --name cloudflare-manager \
   -p 3000:3000 \
-  -v $(pwd)/data:/app/data \
+  -v cloudflare-data:/app/data \
   -e JWT_SECRET=your-secret-key \
   -e NODE_ENV=production \
+  -e DB_PATH=/app/data/data.db \
   cloudflare-manager:latest
 ```
 
-3. **使用docker-compose（推荐）**
-```bash
-# 编辑docker-compose.yml配置环境变量
-docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
-
-# 停止服务
-docker-compose down
-```
+**⚠️ 注意**：
+- Windows/Mac下**不要使用** `-v $(pwd)/data:/app/data` bind mount（会导致权限错误）
+- 推荐使用 Named Volume 或 docker-compose
 ### 方式2: 本地开发
 
 **环境要求**:
@@ -156,6 +173,19 @@ DEBUG_CF_API=false
 
 ### 备份建议
 
+**Docker部署备份**：
+```bash
+# 方式1: 导出整个Named Volume
+docker run --rm \
+  -v cloudflare-data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/cloudflare-data-backup.tar.gz -C /data .
+
+# 方式2: 使用docker cp
+docker cp cloudflare-manager:/app/data/data.db ./data.db.backup
+```
+
+**本地部署备份**：
 ```bash
 # 停止应用
 docker-compose down
