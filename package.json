@@ -1,6 +1,7 @@
 {
   "name": "cloudflare-manager-backend",
   "version": "1.0.0",
+  "type": "module",
   "description": "Cloudflare multi-account batch management backend",
   "main": "dist/index.js",
   "scripts": {
