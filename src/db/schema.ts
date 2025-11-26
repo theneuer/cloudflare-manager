@@ -96,7 +96,69 @@ export function initDatabase(dbPath: string): Database.Database {
     console.error('Migration error (last_error):', error);
   }
 
-  // 自动迁移4：插入script_templates初始数据
+  // 自动迁移4：添加tasks表的worker_name字段
+  try {
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'").all();
+    if (tables.length > 0) {
+      const columns = db.prepare("PRAGMA table_info(tasks)").all() as any[];
+      const hasWorkerName = columns.some(col => col.name === 'worker_name');
+
+      if (!hasWorkerName) {
+        console.log('Running migration: Adding worker_name column to tasks table...');
+        db.exec('ALTER TABLE tasks ADD COLUMN worker_name TEXT;');
+        console.log('Migration completed successfully');
+      }
+    }
+  } catch (error) {
+    console.error('Migration error (worker_name):', error);
+  }
+
+  // 自动迁移5：更新jobs表CHECK约束以支持batch_update和batch_delete类型
+  try {
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='jobs'").all();
+
+    if (tables.length > 0) {
+      const needsMigration = (() => {
+        try {
+          const testId = 'migration-test-batch-' + Date.now();
+          db.prepare(`INSERT INTO jobs (id, type, status, config) VALUES (?, 'batch_update', 'pending', '{}')`).run(testId);
+          db.prepare('DELETE FROM jobs WHERE id = ?').run(testId);
+          return false;
+        } catch (e) {
+          return true;
+        }
+      })();
+
+      if (needsMigration) {
+        console.log('Running migration: Updating jobs table CHECK constraint to support batch types...');
+
+        db.exec(`
+          CREATE TABLE jobs_new (
+            id TEXT PRIMARY KEY,
+            type TEXT NOT NULL CHECK(type IN ('create', 'update', 'delete', 'query', 'list', 'health_check', 'batch_update', 'batch_delete')),
+            status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'partial', 'failed')),
+            config TEXT NOT NULL,
+            total_tasks INTEGER DEFAULT 0,
+            completed_tasks INTEGER DEFAULT 0,
+            failed_tasks INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            started_at DATETIME,
+            completed_at DATETIME
+          );
+
+          INSERT INTO jobs_new SELECT * FROM jobs;
+          DROP TABLE jobs;
+          ALTER TABLE jobs_new RENAME TO jobs;
+        `);
+
+        console.log('Migration completed successfully');
+      }
+    }
+  } catch (error) {
+    console.error('Migration error (jobs batch types):', error);
+  }
+
+  // 自动迁移6：插入script_templates初始数据
   try {
     const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='script_templates'").all();
     if (tables.length > 0) {
@@ -209,7 +271,7 @@ export function initDatabase(dbPath: string): Database.Database {
   db.exec(`
     CREATE TABLE IF NOT EXISTS jobs (
       id TEXT PRIMARY KEY,
-      type TEXT NOT NULL CHECK(type IN ('create', 'update', 'delete', 'query', 'list', 'health_check')),
+      type TEXT NOT NULL CHECK(type IN ('create', 'update', 'delete', 'query', 'list', 'health_check', 'batch_update', 'batch_delete')),
       status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'partial', 'failed')),
       config TEXT NOT NULL,
       total_tasks INTEGER DEFAULT 0,
@@ -227,6 +289,7 @@ export function initDatabase(dbPath: string): Database.Database {
       id TEXT PRIMARY KEY,
       job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
       account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      worker_name TEXT,
       status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'success', 'failed', 'skipped')),
       progress TEXT,
       result TEXT,

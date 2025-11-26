@@ -9,8 +9,11 @@ import type {
   UpdateWorkerConfig,
   DeleteWorkerConfig,
   QueryWorkerConfig,
+  BatchUpdateConfig,
+  BatchDeleteConfig,
   TaskProgress,
   Account,
+  WorkerTarget,
 } from '../models/types.js';
 import { CloudflareAPI } from './CloudflareAPI.js';
 
@@ -27,7 +30,7 @@ export class JobExecutor extends EventEmitter {
   // 创建任务
   createJob(type: Job['type'], config: JobConfig): Job {
     const jobId = nanoid();
-    const { accountIds, ...restConfig } = config;
+    const { accountIds, ...restConfig } = config as any;
 
     const job: Job = {
       id: jobId,
@@ -57,7 +60,7 @@ export class JobExecutor extends EventEmitter {
       );
 
     // 创建tasks
-    accountIds.forEach(accountId => {
+    accountIds.forEach((accountId: string) => {
       const task: Task = {
         id: nanoid(),
         jobId,
@@ -72,6 +75,60 @@ export class JobExecutor extends EventEmitter {
            VALUES (?, ?, ?, ?, ?, ?)`
         )
         .run(task.id, task.jobId, task.accountId, task.status, task.retryCount, task.createdAt);
+    });
+
+    return job;
+  }
+
+  // 创建批量操作任务（按 Worker 维度）
+  createBatchJob(type: 'batch_update' | 'batch_delete', config: BatchUpdateConfig | BatchDeleteConfig): Job {
+    const jobId = nanoid();
+    const workers = config.workers;
+
+    const job: Job = {
+      id: jobId,
+      type,
+      status: 'pending',
+      config,
+      totalTasks: workers.length,
+      completedTasks: 0,
+      failedTasks: 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    this.db
+      .prepare(
+        `INSERT INTO jobs (id, type, status, config, total_tasks, completed_tasks, failed_tasks, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        job.id,
+        job.type,
+        job.status,
+        JSON.stringify(job.config),
+        job.totalTasks,
+        job.completedTasks,
+        job.failedTasks,
+        job.createdAt
+      );
+
+    // 为每个 Worker 创建 task
+    workers.forEach((worker: WorkerTarget) => {
+      const task: Task = {
+        id: nanoid(),
+        jobId,
+        accountId: worker.accountId,
+        workerName: worker.workerName,
+        status: 'pending',
+        retryCount: 0,
+        createdAt: new Date().toISOString(),
+      };
+      this.db
+        .prepare(
+          `INSERT INTO tasks (id, job_id, account_id, worker_name, status, retry_count, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(task.id, task.jobId, task.accountId, task.workerName, task.status, task.retryCount, task.createdAt);
     });
 
     return job;
@@ -161,6 +218,12 @@ export class JobExecutor extends EventEmitter {
           break;
         case 'health_check':
           result = await api.healthCheck();
+          break;
+        case 'batch_update':
+          result = await this.executeBatchUpdateWorker(api, job.config as BatchUpdateConfig, task);
+          break;
+        case 'batch_delete':
+          result = await this.executeBatchDeleteWorker(api, task);
           break;
         default:
           throw new Error(`Unknown job type: ${job.type}`);
@@ -301,6 +364,56 @@ export class JobExecutor extends EventEmitter {
     };
   }
 
+  // 批量更新单个 Worker（task 维度）
+  private async executeBatchUpdateWorker(
+    api: CloudflareAPI,
+    config: BatchUpdateConfig,
+    task: Task
+  ): Promise<any> {
+    const workerName = task.workerName!;
+
+    this.updateTaskProgress(task.id, { step: '查找Worker', current: 1, total: 3 });
+    const workers = await api.listWorkers();
+    const worker = workers.find(w => w.id === workerName);
+    if (!worker) {
+      throw new Error(`Worker ${workerName} not found`);
+    }
+
+    this.updateTaskProgress(task.id, { step: '上传新脚本', current: 2, total: 3 });
+    const versionId = await api.uploadWorkerScript(
+      worker.id,
+      workerName,
+      config.script,
+      config.compatibilityDate,
+      config.bindings
+    );
+
+    this.updateTaskProgress(task.id, { step: '部署新版本', current: 3, total: 3 });
+    const deploymentId = await api.deployWorker(workerName, versionId);
+
+    return { workerName, versionId, deploymentId };
+  }
+
+  // 批量删除单个 Worker（task 维度）
+  private async executeBatchDeleteWorker(
+    api: CloudflareAPI,
+    task: Task
+  ): Promise<any> {
+    const workerName = task.workerName!;
+
+    this.updateTaskProgress(task.id, { step: '查找Worker', current: 1, total: 2 });
+    const workers = await api.listWorkers();
+    const worker = workers.find(w => w.id === workerName);
+    if (!worker) {
+      throw new Error(`Worker ${workerName} not found`);
+    }
+
+    this.updateTaskProgress(task.id, { step: '删除Worker', current: 2, total: 2 });
+    await api.deleteWorker(worker.id);
+
+    return { workerName, deleted: true };
+  }
+
   // 重试失败的tasks
   async retryFailedTasks(jobId: string, taskIds?: string[]): Promise<void> {
     const job = this.getJob(jobId);
@@ -349,6 +462,7 @@ export class JobExecutor extends EventEmitter {
       id: row.id,
       jobId: row.job_id,
       accountId: row.account_id,
+      workerName: row.worker_name || undefined,
       status: row.status,
       progress: row.progress ? JSON.parse(row.progress) : undefined,
       result: row.result ? JSON.parse(row.result) : undefined,
@@ -366,6 +480,7 @@ export class JobExecutor extends EventEmitter {
       id: row.id,
       jobId: row.job_id,
       accountId: row.account_id,
+      workerName: row.worker_name || undefined,
       status: row.status,
       progress: row.progress ? JSON.parse(row.progress) : undefined,
       result: row.result ? JSON.parse(row.result) : undefined,

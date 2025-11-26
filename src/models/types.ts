@@ -34,7 +34,7 @@ export interface Account {
 }
 
 // 任务模型
-export type JobType = 'create' | 'update' | 'delete' | 'query' | 'list' | 'health_check';
+export type JobType = 'create' | 'update' | 'delete' | 'query' | 'list' | 'health_check' | 'batch_update' | 'batch_delete';
 export type JobStatus = 'pending' | 'running' | 'completed' | 'partial' | 'failed';
 export type TaskStatus = 'pending' | 'running' | 'success' | 'failed' | 'skipped';
 
@@ -55,6 +55,7 @@ export interface Task {
   id: string;
   jobId: string;
   accountId: string;
+  workerName?: string;
   status: TaskStatus;
   progress?: TaskProgress;
   result?: any;
@@ -103,7 +104,23 @@ export interface ListWorkersConfig extends BaseJobConfig {
   // 不需要额外参数，只需要accountIds
 }
 
-export type JobConfig = CreateWorkerConfig | UpdateWorkerConfig | DeleteWorkerConfig | QueryWorkerConfig | ListWorkersConfig;
+export interface WorkerTarget {
+  accountId: string;
+  workerName: string;
+}
+
+export interface BatchUpdateConfig {
+  workers: WorkerTarget[];
+  script: string;
+  compatibilityDate?: string;
+  bindings?: WorkerBinding[];
+}
+
+export interface BatchDeleteConfig {
+  workers: WorkerTarget[];
+}
+
+export type JobConfig = CreateWorkerConfig | UpdateWorkerConfig | DeleteWorkerConfig | QueryWorkerConfig | ListWorkersConfig | BatchUpdateConfig | BatchDeleteConfig;
 
 // Worker绑定
 export interface WorkerBinding {

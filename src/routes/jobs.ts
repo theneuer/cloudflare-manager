@@ -174,6 +174,71 @@ export function createJobsRouter(db: Database.Database, jobExecutor: JobExecutor
     }
   });
 
+  // 批量更新Workers（按Worker维度）
+  router.post('/batch-update-workers', async (req: AuthRequest, res: Response) => {
+    try {
+      const { workers, script, compatibilityDate, bindings } = req.body;
+
+      if (!workers || !Array.isArray(workers) || workers.length === 0) {
+        return res.status(400).json({ error: 'workers array required' });
+      }
+
+      if (!script) {
+        return res.status(400).json({ error: 'script required' });
+      }
+
+      // 验证每个 worker 对象
+      for (const w of workers) {
+        if (!w.accountId || !w.workerName) {
+          return res.status(400).json({ error: 'Each worker must have accountId and workerName' });
+        }
+      }
+
+      const job = jobExecutor.createBatchJob('batch_update', {
+        workers,
+        script,
+        compatibilityDate,
+        bindings,
+      });
+
+      jobExecutor.executeJob(job.id).catch(err => {
+        console.error('Batch update job execution error:', err);
+      });
+
+      res.status(202).json(job);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // 批量删除Workers（按Worker维度）
+  router.post('/batch-delete-workers', async (req: AuthRequest, res: Response) => {
+    try {
+      const { workers } = req.body;
+
+      if (!workers || !Array.isArray(workers) || workers.length === 0) {
+        return res.status(400).json({ error: 'workers array required' });
+      }
+
+      // 验证每个 worker 对象
+      for (const w of workers) {
+        if (!w.accountId || !w.workerName) {
+          return res.status(400).json({ error: 'Each worker must have accountId and workerName' });
+        }
+      }
+
+      const job = jobExecutor.createBatchJob('batch_delete', { workers });
+
+      jobExecutor.executeJob(job.id).catch(err => {
+        console.error('Batch delete job execution error:', err);
+      });
+
+      res.status(202).json(job);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // 重试失败的tasks
   router.post('/:id/retry', async (req: AuthRequest, res: Response) => {
     try {
